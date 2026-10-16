@@ -1,8 +1,5 @@
-import {
-  type DesktopPendingSnapShot,
-  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-  type ScopedThreadRef,
-} from "@t3tools/contracts";
+import { IMAGE_ATTACHMENT_MAX_BYTES } from "@t3tools/client-runtime/image-attachment-size";
+import { type DesktopPendingSnapShot, type ScopedThreadRef } from "@t3tools/contracts";
 import { useCallback, useEffect, useRef } from "react";
 
 import {
@@ -140,7 +137,7 @@ export async function deliverSnapShot(
   updateSnapShotAnimationSource(item.id, item.source);
   const capture = await bridge.readSnapShot(item.id);
   const original = dataUrlToFile(capture.dataUrl, capture.name, capture.mimeType);
-  const compressed = await compressImageToByteLimit(original, PROVIDER_SEND_TURN_MAX_IMAGE_BYTES);
+  const compressed = await compressImageToByteLimit(original, IMAGE_ATTACHMENT_MAX_BYTES);
   if (!compressed.ok) {
     finishSnapShotAnimation(item.id);
     throw new Error("The captured window is too large to attach.");

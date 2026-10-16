@@ -6,6 +6,14 @@
  */
 export const IMAGE_ATTACHMENT_MAX_EDGE = 2000;
 
+/**
+ * Largest file, in bytes, an image attachment keeps. Anthropic rejects an image whose base64
+ * is over 5 MB, and for the same mid-turn reason a heavier image ends the running Claude turn.
+ * This is that limit in decoded bytes; web and mobile re-encode anything heavier when it is
+ * attached, well below the `PROVIDER_SEND_TURN_MAX_IMAGE_BYTES` wire cap.
+ */
+export const IMAGE_ATTACHMENT_MAX_BYTES = ((5 * 1024 * 1024) / 4) * 3;
+
 /** Formats a client re-encodes in place. GIF, WebP, and SVG are left as attached. */
 export type DownscalableImageMimeType = "image/png" | "image/jpeg";
 

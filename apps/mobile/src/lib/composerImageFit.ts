@@ -1,11 +1,14 @@
 import {
   downscalableImageMimeType,
   fitImageAttachmentSize,
+  IMAGE_ATTACHMENT_MAX_BYTES,
 } from "@t3tools/client-runtime/image-attachment-size";
 import {
   IMAGE_DIMENSIONS_HEADER_BYTES,
   readImageDimensions,
 } from "@t3tools/shared/imageDimensions";
+
+import { estimateBase64ByteSize } from "./base64";
 
 const PHOTO_JPEG_QUALITY = 0.85;
 
@@ -43,26 +46,45 @@ export async function renderPhoto(
   }
 }
 
+/** Keeps an attachment's name truthful once it has been rendered to a JPEG. */
+export function jpegAttachmentName(name: string): string {
+  return /\.jpe?g$/i.test(name) ? name : `${name.replace(/\.[^.]+$/, "")}.jpg`;
+}
+
+function isOverMaxEdge(base64: string): boolean {
+  const header = atob(base64.slice(0, Math.ceil(IMAGE_DIMENSIONS_HEADER_BYTES / 3) * 4));
+  const bytes = new Uint8Array(header.length);
+  for (let index = 0; index < header.length; index += 1) bytes[index] = header.charCodeAt(index);
+  const dimensions = readImageDimensions(bytes);
+  return dimensions !== null && fitImageAttachmentSize(dimensions) !== null;
+}
+
 /**
- * Scales a PNG or JPEG whose long edge is over `IMAGE_ATTACHMENT_MAX_EDGE` down to that edge
- * in its own format. Returns null when the image fits, is another format (GIF, WebP), or the
- * native renderer fails, so the caller keeps the original bytes. Images inside the limit are
- * never re-encoded: only the header is read to decide.
+ * Fits an attachment to `IMAGE_ATTACHMENT_MAX_EDGE` and `IMAGE_ATTACHMENT_MAX_BYTES`. A PNG or
+ * JPEG over the edge is scaled to it in its own format. An image still over the byte limit,
+ * including a GIF or WebP, is rendered to a JPEG instead, so the result can change type. Returns
+ * null when the image already fits or the native renderer fails, so the caller keeps the
+ * original bytes. Images inside both limits are never re-encoded: only the header is read.
  */
 export async function fitComposerImage(image: {
   readonly uri: string;
   readonly mimeType: string;
   readonly base64: string;
-}): Promise<{ base64: string; uri: string } | null> {
+}): Promise<{ base64: string; uri: string; mimeType: "image/png" | "image/jpeg" } | null> {
   const mimeType = downscalableImageMimeType(image.mimeType);
-  if (mimeType === null) return null;
   try {
-    const header = atob(image.base64.slice(0, Math.ceil(IMAGE_DIMENSIONS_HEADER_BYTES / 3) * 4));
-    const bytes = new Uint8Array(header.length);
-    for (let index = 0; index < header.length; index += 1) bytes[index] = header.charCodeAt(index);
-    const dimensions = readImageDimensions(bytes);
-    if (dimensions === null || fitImageAttachmentSize(dimensions) === null) return null;
-    return await renderPhoto(image.uri, mimeType === "image/png" ? "png" : "jpeg");
+    if (mimeType !== null && isOverMaxEdge(image.base64)) {
+      const scaled = await renderPhoto(image.uri, mimeType === "image/png" ? "png" : "jpeg");
+      if (
+        mimeType === "image/jpeg" ||
+        estimateBase64ByteSize(scaled.base64) <= IMAGE_ATTACHMENT_MAX_BYTES
+      ) {
+        return { ...scaled, mimeType };
+      }
+    } else if (estimateBase64ByteSize(image.base64) <= IMAGE_ATTACHMENT_MAX_BYTES) {
+      return null;
+    }
+    return { ...(await renderPhoto(image.uri)), mimeType: "image/jpeg" };
   } catch (error) {
     console.warn("[composer-images] could not scale an oversized image", error);
     return null;

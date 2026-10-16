@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { IMAGE_ATTACHMENT_MAX_BYTES } from "@t3tools/client-runtime/image-attachment-size";
 import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@t3tools/contracts";
 
 const files = new Map<string, { base64: string; deleted: boolean; text?: string }>();
@@ -14,7 +15,11 @@ vi.mock("expo-clipboard", () => clipboard);
 
 /** A native image renderer that reports the source size the test gives it. */
 const manipulator = vi.hoisted(() => {
-  const state = { sourceSize: { width: 0, height: 0 } };
+  const state: {
+    sourceSize: { width: number; height: number };
+    renderedPngBase64?: string;
+    savedFormats: string[];
+  } = { sourceSize: { width: 0, height: 0 }, savedFormats: [] };
   const manipulate = vi.fn((source: string | { width: number; height: number }) => {
     let size = typeof source === "string" ? state.sourceSize : source;
     const context = {
@@ -25,10 +30,16 @@ const manipulator = vi.hoisted(() => {
       renderAsync: vi.fn(async () => ({
         ...size,
         release: vi.fn(),
-        saveAsync: vi.fn(async (options: { format: string }) => ({
-          uri: `file:///cache/rendered.${options.format}`,
-          base64: `cmVuZGVyZWQ=`,
-        })),
+        saveAsync: vi.fn(async (options: { format: string }) => {
+          state.savedFormats.push(options.format);
+          return {
+            uri: `file:///cache/rendered.${options.format}`,
+            base64:
+              options.format === "png" && state.renderedPngBase64 !== undefined
+                ? state.renderedPngBase64
+                : `cmVuZGVyZWQ=`,
+          };
+        }),
       })),
     };
     return context;
@@ -159,8 +170,13 @@ describe("composer clipboard paste", () => {
 
 describe("oversized pasted images", () => {
   const u32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
-  const pngDataUrl = (width: number, height: number) =>
-    `data:image/png;base64,${Buffer.from([
+  const pngDataUrl = (width: number, height: number, totalBytes = 0) => {
+    const header = pngHeader(width, height);
+    const padding = Buffer.alloc(Math.max(0, totalBytes - header.length));
+    return `data:image/png;base64,${Buffer.concat([header, padding]).toString("base64")}`;
+  };
+  const pngHeader = (width: number, height: number) =>
+    Buffer.from([
       0x89,
       0x50,
       0x4e,
@@ -181,10 +197,12 @@ describe("oversized pasted images", () => {
       0,
       0,
       0,
-    ]).toString("base64")}`;
+    ]);
 
   beforeEach(() => {
     vi.clearAllMocks();
+    manipulator.state.renderedPngBase64 = undefined;
+    manipulator.state.savedFormats = [];
     clipboard.hasImageAsync.mockResolvedValue(true);
   });
 
@@ -204,6 +222,55 @@ describe("oversized pasted images", () => {
         dataUrl: "data:image/png;base64,cmVuZGVyZWQ=",
         previewUri: "data:image/png;base64,cmVuZGVyZWQ=",
       }),
+    ]);
+  });
+
+  it("renders a clipboard image within 2000px but over the byte limit to a JPEG", async () => {
+    manipulator.state.sourceSize = { width: 1800, height: 1200 };
+    const pasted = pngDataUrl(1800, 1200, IMAGE_ATTACHMENT_MAX_BYTES + 1);
+    clipboard.getImageAsync.mockResolvedValue({ data: pasted });
+
+    const result = await pasteComposerClipboard({ existingCount: 0 });
+
+    expect(manipulator.manipulate).toHaveBeenCalledWith(pasted);
+    expect(manipulator.manipulate.mock.results.at(-1)?.value.resize).not.toHaveBeenCalled();
+    expect(manipulator.state.savedFormats).toEqual(["jpeg"]);
+    expect(result.images).toEqual([
+      expect.objectContaining({
+        name: "pasted-image.jpg",
+        mimeType: "image/jpeg",
+        dataUrl: "data:image/jpeg;base64,cmVuZGVyZWQ=",
+      }),
+    ]);
+  });
+
+  it("renders a scaled PNG that is still over the byte limit to a JPEG", async () => {
+    manipulator.state.sourceSize = { width: 3024, height: 1964 };
+    manipulator.state.renderedPngBase64 = Buffer.alloc(IMAGE_ATTACHMENT_MAX_BYTES + 1).toString(
+      "base64",
+    );
+    clipboard.getImageAsync.mockResolvedValue({ data: pngDataUrl(3024, 1964) });
+
+    const result = await pasteComposerClipboard({ existingCount: 0 });
+
+    expect(manipulator.state.savedFormats).toEqual(["png", "jpeg"]);
+    expect(result.images).toEqual([
+      expect.objectContaining({
+        mimeType: "image/jpeg",
+        dataUrl: "data:image/jpeg;base64,cmVuZGVyZWQ=",
+      }),
+    ]);
+  });
+
+  it("keeps an image exactly at the byte limit byte for byte", async () => {
+    const pasted = pngDataUrl(1800, 1200, IMAGE_ATTACHMENT_MAX_BYTES);
+    clipboard.getImageAsync.mockResolvedValue({ data: pasted });
+
+    const result = await pasteComposerClipboard({ existingCount: 0 });
+
+    expect(manipulator.manipulate).not.toHaveBeenCalled();
+    expect(result.images).toEqual([
+      expect.objectContaining({ mimeType: "image/png", dataUrl: pasted }),
     ]);
   });
 

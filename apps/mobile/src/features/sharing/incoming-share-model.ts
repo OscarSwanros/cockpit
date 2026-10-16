@@ -12,7 +12,7 @@ import * as Schema from "effect/Schema";
 import type { ResolvedSharePayload, SharePayload } from "expo-sharing";
 
 import { DraftComposerAttachmentSchema } from "../../lib/composer-image-schema";
-import { fitComposerImage } from "../../lib/composerImageFit";
+import { fitComposerImage, jpegAttachmentName } from "../../lib/composerImageFit";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import { estimateBase64ByteSize } from "../../lib/base64";
 
@@ -416,6 +416,7 @@ export async function buildIncomingShareDraft(input: {
         base64: sharedBase64,
       });
       const base64 = fitted?.base64 ?? sharedBase64;
+      const attachmentMimeType = fitted?.mimeType ?? mimeType;
       const sizeBytes = fitted
         ? estimateBase64ByteSize(base64)
         : (resolved?.contentSize ?? estimateBase64ByteSize(base64));
@@ -425,12 +426,13 @@ export async function buildIncomingShareDraft(input: {
         );
         continue;
       }
-      const dataUrl = `data:${mimeType};base64,${base64}`;
+      const dataUrl = `data:${attachmentMimeType};base64,${base64}`;
+      const name = resolved?.originalName ?? fallbackName(uri, index, mimeType);
       attachments.push({
         id: `${input.id}:image:${index}`,
         type: "image",
-        name: resolved?.originalName ?? fallbackName(uri, index, mimeType),
-        mimeType,
+        name: attachmentMimeType === mimeType ? name : jpegAttachmentName(name),
+        mimeType: attachmentMimeType,
         sizeBytes,
         dataUrl,
         // The share provider's file is temporary. A data-backed preview keeps

@@ -4,9 +4,9 @@
  *
  * - The prompt stash persists images as base64 in localStorage (~5MB origin
  *   quota), so `compressImageForStash` targets a per-image character budget.
- * - The composer accepts pasted/dropped images larger than the provider's
- *   `PROVIDER_SEND_TURN_MAX_IMAGE_BYTES` wire cap and shrinks them to fit
- *   via `compressImageToByteLimit` instead of rejecting the paste.
+ * - The composer accepts pasted/dropped images larger than the per-image
+ *   `IMAGE_ATTACHMENT_MAX_BYTES` limit and shrinks them to fit via
+ *   `compressImageToByteLimit` instead of rejecting the paste.
  *
  * Supported images already within budget pass through untouched, except that
  * a PNG or JPEG longer than `IMAGE_ATTACHMENT_MAX_EDGE` on a side is scaled down

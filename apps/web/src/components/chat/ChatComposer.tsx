@@ -48,11 +48,11 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
-  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
 } from "@t3tools/contracts";
 import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+import { IMAGE_ATTACHMENT_MAX_BYTES } from "@t3tools/client-runtime/image-attachment-size";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import * as Schema from "effect/Schema";
 import {
@@ -5795,12 +5795,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       const nextImages: ComposerImageAttachment[] = [];
       let compressionError: string | null = null;
       for (const file of acceptedImages) {
-        // Images over the wire cap are downscaled to fit rather than
+        // Images over the per-image limit are downscaled to fit rather than
         // refused; files already within it pass through byte-for-byte.
-        const compressed = await prepareImageForAttachment(
-          file,
-          PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-        );
+        const compressed = await prepareImageForAttachment(file, IMAGE_ATTACHMENT_MAX_BYTES);
         if (!compressed.ok) {
           compressionError =
             compressed.reason === "unreadable"

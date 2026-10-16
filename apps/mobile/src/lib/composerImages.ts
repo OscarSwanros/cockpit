@@ -20,7 +20,7 @@ import {
 } from "./composerAttachmentFiles";
 import { imageMimeType } from "@t3tools/shared/image";
 import { videoMimeType } from "@t3tools/shared/video";
-import { fitComposerImage, renderPhoto } from "./composerImageFit";
+import { fitComposerImage, jpegAttachmentName, renderPhoto } from "./composerImageFit";
 import { beginForegroundHandoff } from "./foreground-handoff";
 import { uuidv4 } from "./uuid";
 import { writeFileAtomically } from "./atomic-file";
@@ -497,10 +497,11 @@ export async function pickComposerMedia(input: {
           mimeType: originalMimeType,
           base64,
         });
+        const fittedMimeType = fitted?.mimeType ?? originalMimeType;
         image = {
           base64: fitted?.base64 ?? base64,
-          mimeType: originalMimeType,
-          name,
+          mimeType: fittedMimeType,
+          name: fittedMimeType === originalMimeType ? name : jpegAttachmentName(name),
           previewUri: fitted?.uri ?? asset.uri,
         };
       } else {
@@ -590,7 +591,8 @@ export async function pasteComposerClipboard(input: { readonly existingCount: nu
       base64: pastedBase64,
     });
     const base64 = fitted?.base64 ?? pastedBase64;
-    const dataUrl = fitted ? `data:image/png;base64,${base64}` : image.data;
+    const mimeType = fitted?.mimeType ?? "image/png";
+    const dataUrl = fitted ? `data:${mimeType};base64,${base64}` : image.data;
     const sizeBytes = estimateBase64ByteSize(base64);
     if (sizeBytes <= 0 || sizeBytes > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
       return {
@@ -605,8 +607,8 @@ export async function pasteComposerClipboard(input: { readonly existingCount: nu
         {
           id: uuidv4(),
           type: "image",
-          name: "pasted-image.png",
-          mimeType: "image/png",
+          name: mimeType === "image/png" ? "pasted-image.png" : "pasted-image.jpg",
+          mimeType,
           sizeBytes,
           dataUrl,
           previewUri: dataUrl,
@@ -681,9 +683,14 @@ export async function convertPastedImagesToAttachments(input: {
         continue;
       }
       const file = new File(uri);
-      const mimeType = mimeTypeFromUri(uri);
+      const pastedMimeType = mimeTypeFromUri(uri);
       const pastedBase64 = await file.base64();
-      const fitted = await fitComposerImage({ uri, mimeType, base64: pastedBase64 });
+      const fitted = await fitComposerImage({
+        uri,
+        mimeType: pastedMimeType,
+        base64: pastedBase64,
+      });
+      const mimeType = fitted?.mimeType ?? pastedMimeType;
       const base64 = fitted?.base64 ?? pastedBase64;
       const sizeBytes = estimateBase64ByteSize(base64);
       if (sizeBytes <= 0 || sizeBytes > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
