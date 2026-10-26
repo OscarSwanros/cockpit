@@ -14356,7 +14356,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       ),
     );
 
-    it.effect("shows a /goal with attached context as the user wrote it", () =>
+    it.effect.each([false, true])("shows attached goal context (persisted: %s)", (persisted) =>
       Effect.gen(function* () {
         const harness = yield* makeWakeHarness;
         const condition = "Report to [Coaching Hub](t3-context://v1/thread/thread_abc).";
@@ -14377,7 +14377,12 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         yield* harness.runtime.startTurn(
           makeClaudeTestTurnInput({
             threadId: harness.threadId,
-            providerThread: harness.providerThread,
+            providerThread: {
+              ...harness.providerThread,
+              ...(persisted
+                ? { goal: { objective: projected, status: "active" as const, checks: 2 } }
+                : {}),
+            },
             now: yield* DateTime.now,
             attemptId: RunAttemptId.make("goal-context-attempt"),
             text: `/goal ${projected}`,
@@ -14385,7 +14390,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           }),
         );
         for (const frame of [
-          syntheticFrame("goal-context-set", `Goal set: ${projected}`),
+          ...(persisted ? [] : [syntheticFrame("goal-context-set", `Goal set: ${projected}`)]),
           stopHookFeedback("goal-context-check", projected, "Not reported yet."),
           makeResultFrame({
             uuid: "goal-context-result",
@@ -14396,18 +14401,19 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           yield* Queue.offer(harness.sdkMessages, frame);
         }
         yield* Queue.take(harness.terminalReceipts);
-        assert.isTrue(
-          harness.events.some(
-            (event) =>
-              event.type === "turn_item.updated" &&
-              event.turnItem.type === "assistant_message" &&
-              event.turnItem.text === `Goal set: ${condition}`,
-          ),
-        );
+        if (!persisted)
+          assert.isTrue(
+            harness.events.some(
+              (event) =>
+                event.type === "turn_item.updated" &&
+                event.turnItem.type === "assistant_message" &&
+                event.turnItem.text === `Goal set: ${condition}`,
+            ),
+          );
         assert.deepEqual(goalStatuses(harness.events).at(-1), {
           objective: condition,
           status: "active",
-          checks: 1,
+          checks: persisted ? 3 : 1,
           lastCheck: "Not reported yet.",
         });
       }).pipe(
