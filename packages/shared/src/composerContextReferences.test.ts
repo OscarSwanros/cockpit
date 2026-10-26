@@ -266,6 +266,12 @@ describe("provider projection", () => {
     expect(projected).not.toContain("boom");
   });
 
+  it("restores escaped envelope tags in reference labels", () => {
+    const text = "Report to [<context> review](t3-context://v1/thread/thread_abc).";
+    const projected = projectComposerContextForProvider({ text, records: [] });
+    expect(restoreComposerContextReferences(projected)).toBe(text);
+  });
+
   it("restores echoed projections to reference links without their envelope", () => {
     const text =
       "Watch ![shot.png](t3-context://v1/image/ctx_i), [T1](t3-context://v1/terminal/ctx_t) and [Checkout](t3-context://v1/preview-annotation/ctx_p).";
