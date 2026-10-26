@@ -9903,7 +9903,13 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             });
             yield* rememberProviderThread(turnInput.providerThread);
             if (!goalsByNativeThread.has(nativeThreadId)) {
-              goalsByNativeThread.set(nativeThreadId, turnInput.providerThread.goal ?? null);
+              const goal = turnInput.providerThread.goal;
+              goalsByNativeThread.set(
+                nativeThreadId,
+                goal
+                  ? { ...goal, objective: restoreComposerContextReferences(goal.objective) }
+                  : null,
+              );
             }
             if (!pdfBudgets.has(nativeThreadId)) {
               // Older sessions did not record retained attachments. Keep their
