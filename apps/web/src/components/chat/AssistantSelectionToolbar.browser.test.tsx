@@ -1,4 +1,4 @@
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, type AssistantCitation } from "@t3tools/contracts";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
@@ -16,7 +16,7 @@ import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
 
 const threadRef = { environmentId: EnvironmentId.make("env"), threadId: ThreadId.make("thread") };
 
-function Thread({ onCite }: { onCite: () => boolean }) {
+function Thread({ onCite }: { onCite: (citation: AssistantCitation) => boolean }) {
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   return (
     <div ref={setViewport} style={{ width: 600, height: 300, overflow: "auto" }}>
@@ -31,7 +31,7 @@ function Thread({ onCite }: { onCite: () => boolean }) {
 
 async function mount() {
   mocks.show.mockReset();
-  const onCite = vi.fn(() => true);
+  const onCite = vi.fn((_citation: AssistantCitation) => true);
   render(<Thread onCite={onCite} />);
   await vi.waitFor(() => expect(document.getElementById("first")).not.toBeNull());
   return { onCite };
