@@ -17,6 +17,7 @@ import {
   isSelectionRectVisible,
   observeSelectionActions,
   resolveSelectionActionPosition,
+  SELECTION_MULTI_CLICK_INTERVAL_MS,
   type SelectionActionPoint,
 } from "~/lib/selectionActions";
 import { Button } from "../ui/button";
@@ -136,11 +137,34 @@ export function AssistantSelectionToolbar({
         }),
       };
     };
+    // Clicks that continue a burst after a triple-click cite would otherwise close the new
+    // comment box and reselect the paragraph, so they are absorbed until the burst ends.
+    let absorb: { point: SelectionActionPoint; until: number } | null = null;
+    const absorbBurstClick = (event: MouseEvent) => {
+      if (!absorb) return;
+      const continuesBurst =
+        event.button === 0 &&
+        event.timeStamp <= absorb.until &&
+        Math.abs(event.clientX - absorb.point.x) <= 8 &&
+        Math.abs(event.clientY - absorb.point.y) <= 8;
+      if (!continuesBurst) {
+        if (event.type === "pointerdown") absorb = null;
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.type === "mouseup")
+        absorb.until = event.timeStamp + SELECTION_MULTI_CLICK_INTERVAL_MS;
+    };
+    const burstEvents = ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"];
     const update = (pointer: SelectionActionPoint | null, clicks: number) => {
       const target = resolve(pointer);
       if (target && clicks >= 3 && citesOnTripleClick() && citeSelection(target)) {
         actionsRef.current?.cancel();
         setSelection(null);
+        if (pointer) {
+          absorb = { point: pointer, until: performance.now() + SELECTION_MULTI_CLICK_INTERVAL_MS };
+        }
         return;
       }
       setSelection(target);
@@ -213,7 +237,9 @@ export function AssistantSelectionToolbar({
     document.addEventListener("keydown", focusActions, true);
     document.addEventListener("selectionchange", actions.selectionChanged);
     viewport.addEventListener("contextmenu", citeFromContextMenu);
+    for (const type of burstEvents) window.addEventListener(type, absorbBurstClick, true);
     return () => {
+      for (const type of burstEvents) window.removeEventListener(type, absorbBurstClick, true);
       viewport.removeEventListener("contextmenu", citeFromContextMenu);
       document.removeEventListener("keydown", focusActions, true);
       document.removeEventListener("selectionchange", actions.selectionChanged);

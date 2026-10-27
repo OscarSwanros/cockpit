@@ -130,6 +130,27 @@ describe("AssistantSelectionToolbar", () => {
     expect(window.getSelection()!.isCollapsed).toBe(true);
   });
 
+  it("keeps the comment box when a fourth click follows a triple-click cite", async () => {
+    await using mounted = await mount({ tripleClickAction: "cite" });
+    const { onCite } = mounted;
+    const commentBox = document.createElement("textarea");
+    document.body.append(commentBox);
+    onCite.mockImplementation(() => {
+      commentBox.focus();
+      return true;
+    });
+    const paragraph = document.getElementById("second")!;
+
+    await userEvent.tripleClick(paragraph);
+    await vi.waitFor(() => expect(document.activeElement).toBe(commentBox), { timeout: 250 });
+    await userEvent.click(paragraph);
+
+    expect(document.activeElement).toBe(commentBox);
+    expect(window.getSelection()!.isCollapsed).toBe(true);
+    expect(onCite).toHaveBeenCalledTimes(1);
+    commentBox.remove();
+  });
+
   it("shows the Cite button right after a triple-click by default", async () => {
     await using mounted = await mount();
     const { onCite } = mounted;
