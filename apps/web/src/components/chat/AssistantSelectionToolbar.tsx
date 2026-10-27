@@ -7,6 +7,7 @@ import {
 import { QuoteIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { readLocalApi } from "~/localApi";
 import {
   captureAssistantTextSelection,
   type AssistantCitationSourceAnchor,
@@ -19,6 +20,12 @@ import {
 } from "~/lib/selectionActions";
 import { Button } from "../ui/button";
 
+type CitableSelection = {
+  citation: AssistantCitation;
+  position: SelectionActionPoint;
+  sourceAnchor: AssistantCitationSourceAnchor;
+};
+
 export function AssistantSelectionToolbar({
   viewport,
   threadRef,
@@ -28,11 +35,9 @@ export function AssistantSelectionToolbar({
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
 }) {
-  const [selection, setSelection] = useState<{
-    citation: AssistantCitation;
-    position: SelectionActionPoint;
-    sourceAnchor: AssistantCitationSourceAnchor;
-  } | null>(null);
+  const [selection, setSelection] = useState<CitableSelection | null>(null);
+  const onCiteRef = useRef(onCite);
+  onCiteRef.current = onCite;
   const toolbarRef = useRef<HTMLButtonElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
 
@@ -47,20 +52,14 @@ export function AssistantSelectionToolbar({
   useEffect(() => {
     if (!viewport) return;
     const clear = () => setSelection(null);
-    const update = (pointer: SelectionActionPoint | null) => {
+    const resolve = (pointer: SelectionActionPoint | null): CitableSelection | null => {
       const nativeSelection = window.getSelection();
       const captured = captureAssistantTextSelection(viewport, nativeSelection);
       const messageId = captured?.source.dataset.assistantCitationSource;
-      if (!captured || !messageId) {
-        clear();
-        return;
-      }
+      if (!captured || !messageId) return null;
       const rect = captured.range.getBoundingClientRect();
       const viewportRect = viewport.getBoundingClientRect();
-      if (!isSelectionRectVisible(rect, [viewportRect])) {
-        clear();
-        return;
-      }
+      if (!isSelectionRectVisible(rect, [viewportRect])) return null;
       // A selection can cross blocks with different clipping ancestors.
       const common = captured.range.commonAncestorContainer;
       const walker = document.createTreeWalker(common, NodeFilter.SHOW_TEXT);
@@ -103,10 +102,7 @@ export function AssistantSelectionToolbar({
         }
         visible = lines.some((line) => isSelectionRectVisible(line, clips));
       }
-      if (!visible) {
-        clear();
-        return;
-      }
+      if (!visible) return null;
       const rects = captured.range.getClientRects();
       const pointerOnText =
         pointer !== null &&
@@ -117,7 +113,7 @@ export function AssistantSelectionToolbar({
             pointer.y >= line.top - 8 &&
             pointer.y <= line.bottom + 8,
         );
-      setSelection({
+      return {
         sourceAnchor: { source: captured.source, range: captured.range, viewport },
         citation: {
           version: 1,
@@ -131,8 +127,9 @@ export function AssistantSelectionToolbar({
           pointer: pointerOnText ? pointer : null,
           viewport: { width: window.innerWidth, height: window.innerHeight },
         }),
-      });
+      };
     };
+    const update = (pointer: SelectionActionPoint | null) => setSelection(resolve(pointer));
     const actions = observeSelectionActions({
       element: viewport,
       getActionElement: () => toolbarRef.current,
@@ -161,9 +158,51 @@ export function AssistantSelectionToolbar({
       event.stopPropagation();
       toolbar.focus({ preventScroll: true });
     };
+    const citeFromContextMenu = (event: MouseEvent) => {
+      if (event.defaultPrevented) return;
+      const pointer = { x: event.clientX, y: event.clientY };
+      const target = resolve(pointer);
+      if (!target) return;
+      const onSelectedText = Array.from(target.sourceAnchor.range.getClientRects()).some(
+        (line) =>
+          pointer.x >= line.left &&
+          pointer.x <= line.right &&
+          pointer.y >= line.top &&
+          pointer.y <= line.bottom,
+      );
+      const api = readLocalApi();
+      if (!onSelectedText || !api) return;
+      event.preventDefault();
+      const tooLong = target.citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH;
+      void api.contextMenu
+        .show(
+          [
+            {
+              id: "cite",
+              label: tooLong ? "Cite (selection too long)" : "Cite",
+              icon: "message-square-plus",
+              disabled: tooLong,
+            },
+            { id: "copy", label: "Copy", icon: "copy" },
+          ],
+          pointer,
+        )
+        .then((action) => {
+          if (action === "copy") {
+            document.execCommand("copy");
+          } else if (
+            action === "cite" &&
+            onCiteRef.current(target.citation, target.sourceAnchor)
+          ) {
+            window.getSelection()?.removeAllRanges();
+          }
+        });
+    };
     document.addEventListener("keydown", focusActions, true);
     document.addEventListener("selectionchange", actions.selectionChanged);
+    viewport.addEventListener("contextmenu", citeFromContextMenu);
     return () => {
+      viewport.removeEventListener("contextmenu", citeFromContextMenu);
       document.removeEventListener("keydown", focusActions, true);
       document.removeEventListener("selectionchange", actions.selectionChanged);
       actions.dispose();
