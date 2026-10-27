@@ -156,7 +156,14 @@ export function AssistantSelectionToolbar({
       if (event.type === "mouseup")
         absorb.until = event.timeStamp + SELECTION_MULTI_CLICK_INTERVAL_MS;
     };
-    const burstEvents = ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"];
+    const burstEvents = [
+      "pointerdown",
+      "mousedown",
+      "pointerup",
+      "mouseup",
+      "click",
+      "dblclick",
+    ] as const;
     const update = (pointer: SelectionActionPoint | null, clicks: number) => {
       const target = resolve(pointer);
       if (target && clicks >= 3 && citesOnTripleClick() && citeSelection(target)) {
