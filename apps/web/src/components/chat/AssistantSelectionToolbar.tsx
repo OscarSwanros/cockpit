@@ -5,7 +5,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { QuoteIcon } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { readLocalApi } from "~/localApi";
 import {
@@ -36,8 +36,10 @@ export function AssistantSelectionToolbar({
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
 }) {
   const [selection, setSelection] = useState<CitableSelection | null>(null);
-  const onCiteRef = useRef(onCite);
-  onCiteRef.current = onCite;
+  const citeFromMenu = useEffectEvent(
+    (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) =>
+      onCite(citation, sourceAnchor),
+  );
   const toolbarRef = useRef<HTMLButtonElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
 
@@ -190,10 +192,7 @@ export function AssistantSelectionToolbar({
         .then((action) => {
           if (action === "copy") {
             document.execCommand("copy");
-          } else if (
-            action === "cite" &&
-            onCiteRef.current(target.citation, target.sourceAnchor)
-          ) {
+          } else if (action === "cite" && citeFromMenu(target.citation, target.sourceAnchor)) {
             window.getSelection()?.removeAllRanges();
           }
         });
