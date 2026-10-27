@@ -53,7 +53,7 @@ export function observeSelectionActions({
   element: HTMLElement;
   getActionElement?: () => HTMLElement | null;
   restoreAfterScroll?: boolean;
-  onSelection: (pointer: SelectionActionPoint | null) => void;
+  onSelection: (pointer: SelectionActionPoint | null, clicks: number) => void;
   onDismiss: (reason: "interaction" | "cancel") => void;
 }) {
   const document = element.ownerDocument;
@@ -89,14 +89,14 @@ export function observeSelectionActions({
     cancel();
     onDismiss("interaction");
   };
-  const schedule = (delay: number) => {
+  const schedule = (delay: number, clicks = 0) => {
     restorable = true;
     cancelPending();
     timer = view.setTimeout(() => {
       timer = null;
       frame = view.requestAnimationFrame(() => {
         frame = null;
-        onSelection(pointer);
+        onSelection(pointer, clicks);
       });
     }, delay);
   };
@@ -133,7 +133,7 @@ export function observeSelectionActions({
     if (!gestureActive) return;
     gestureActive = false;
     pointer = { x: event.clientX, y: event.clientY };
-    schedule(event.detail === 2 ? SELECTION_MULTI_CLICK_INTERVAL_MS : 0);
+    schedule(event.detail === 2 ? SELECTION_MULTI_CLICK_INTERVAL_MS : 0, event.detail);
   };
   const onKeyDown = (event: KeyboardEvent) => {
     if (isActionTarget(event.target) && event.key !== "Escape") return;

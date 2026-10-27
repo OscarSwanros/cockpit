@@ -36,10 +36,12 @@ export function AssistantSelectionToolbar({
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
 }) {
   const [selection, setSelection] = useState<CitableSelection | null>(null);
-  const citeFromMenu = useEffectEvent(
-    (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) =>
-      onCite(citation, sourceAnchor),
-  );
+  const citeSelection = useEffectEvent(({ citation, sourceAnchor }: CitableSelection) => {
+    if (citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH) return false;
+    if (!onCite(citation, sourceAnchor)) return false;
+    window.getSelection()?.removeAllRanges();
+    return true;
+  });
   const toolbarRef = useRef<HTMLButtonElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
 
@@ -131,7 +133,16 @@ export function AssistantSelectionToolbar({
         }),
       };
     };
-    const update = (pointer: SelectionActionPoint | null) => setSelection(resolve(pointer));
+    const update = (pointer: SelectionActionPoint | null, clicks: number) => {
+      const target = resolve(pointer);
+      // A triple-click selects a whole paragraph, so it cites without the extra button step.
+      if (target && clicks >= 3 && citeSelection(target)) {
+        actionsRef.current?.cancel();
+        setSelection(null);
+        return;
+      }
+      setSelection(target);
+    };
     const actions = observeSelectionActions({
       element: viewport,
       getActionElement: () => toolbarRef.current,
@@ -192,8 +203,8 @@ export function AssistantSelectionToolbar({
         .then((action) => {
           if (action === "copy") {
             document.execCommand("copy");
-          } else if (action === "cite" && citeFromMenu(target.citation, target.sourceAnchor)) {
-            window.getSelection()?.removeAllRanges();
+          } else if (action === "cite") {
+            citeSelection(target);
           }
         });
     };

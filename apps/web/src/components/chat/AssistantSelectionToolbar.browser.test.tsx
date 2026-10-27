@@ -32,9 +32,8 @@ function Thread({ onCite }: { onCite: (citation: AssistantCitation) => boolean }
 async function mount() {
   mocks.show.mockReset();
   const onCite = vi.fn((_citation: AssistantCitation) => true);
-  render(<Thread onCite={onCite} />);
-  await vi.waitFor(() => expect(document.getElementById("first")).not.toBeNull());
-  return { onCite };
+  const screen = await render(<Thread onCite={onCite} />);
+  return { onCite, [Symbol.asyncDispose]: () => screen[Symbol.asyncDispose]() };
 }
 
 function selectWords(id: string, start: number, end: number) {
@@ -66,7 +65,8 @@ const citeButton = () =>
 
 describe("AssistantSelectionToolbar", () => {
   it("cites the selection from the right-click menu", async () => {
-    const { onCite } = await mount();
+    await using mounted = await mount();
+    const { onCite } = mounted;
     mocks.show.mockResolvedValue("cite");
     const rect = selectWords("first", 7, 17);
 
@@ -87,7 +87,8 @@ describe("AssistantSelectionToolbar", () => {
   });
 
   it("keeps the selection when the menu is dismissed", async () => {
-    const { onCite } = await mount();
+    await using mounted = await mount();
+    const { onCite } = mounted;
     mocks.show.mockResolvedValue(null);
     const rect = selectWords("first", 7, 17);
 
@@ -99,7 +100,7 @@ describe("AssistantSelectionToolbar", () => {
   });
 
   it("leaves right-clicks off the selected text to the default menu", async () => {
-    await mount();
+    await using _mounted = await mount();
     selectWords("first", 7, 17);
     const other = document.getElementById("second")!.getBoundingClientRect();
 
@@ -109,12 +110,27 @@ describe("AssistantSelectionToolbar", () => {
     expect(mocks.show).not.toHaveBeenCalled();
   });
 
-  it("shows Cite right after a triple-click", async () => {
-    await mount();
-    const paragraph = document.getElementById("second")!;
+  it("cites a triple-clicked paragraph without showing the Cite button", async () => {
+    await using mounted = await mount();
+    const { onCite } = mounted;
 
-    await userEvent.tripleClick(paragraph);
+    await userEvent.tripleClick(document.getElementById("second")!);
 
-    await expect.poll(citeButton, { timeout: 250, interval: 10 }).not.toBeNull();
+    await vi.waitFor(() => expect(onCite).toHaveBeenCalledTimes(1), { timeout: 250 });
+    expect(onCite.mock.calls[0]![0]).toMatchObject({
+      text: expect.stringContaining("Then run the integration tests again."),
+    });
+    expect(citeButton()).toBeNull();
+    expect(window.getSelection()!.isCollapsed).toBe(true);
+  });
+
+  it("still shows the Cite button after a double-click", async () => {
+    await using mounted = await mount();
+    const { onCite } = mounted;
+
+    await userEvent.dblClick(document.getElementById("second")!);
+
+    await expect.poll(citeButton, { timeout: 1500, interval: 20 }).not.toBeNull();
+    expect(onCite).not.toHaveBeenCalled();
   });
 });
