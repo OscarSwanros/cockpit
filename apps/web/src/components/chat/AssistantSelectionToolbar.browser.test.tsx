@@ -6,7 +6,12 @@ import { userEvent } from "vite-plus/test/browser";
 import "~/index.css";
 import { render } from "../../../test/render";
 
-const mocks = vi.hoisted(() => ({ show: vi.fn() }));
+const mocks = vi.hoisted(() => ({ show: vi.fn(), tripleClickAction: "select" as string }));
+vi.mock(import("~/hooks/useSettings"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  useClientSettings: ((select: (settings: { tripleClickAction: string }) => unknown) =>
+    select({ tripleClickAction: mocks.tripleClickAction })) as never,
+}));
 vi.mock(import("~/localApi"), async (importOriginal) => ({
   ...(await importOriginal()),
   readLocalApi: () => ({ contextMenu: { show: mocks.show, close: vi.fn() } }) as never,
@@ -29,8 +34,9 @@ function Thread({ onCite }: { onCite: (citation: AssistantCitation) => boolean }
   );
 }
 
-async function mount() {
+async function mount({ tripleClickAction = "select" } = {}) {
   mocks.show.mockReset();
+  mocks.tripleClickAction = tripleClickAction;
   const onCite = vi.fn((_citation: AssistantCitation) => true);
   const screen = await render(<Thread onCite={onCite} />);
   return { onCite, [Symbol.asyncDispose]: () => screen[Symbol.asyncDispose]() };
@@ -110,8 +116,8 @@ describe("AssistantSelectionToolbar", () => {
     expect(mocks.show).not.toHaveBeenCalled();
   });
 
-  it("cites a triple-clicked paragraph without showing the Cite button", async () => {
-    await using mounted = await mount();
+  it("cites a triple-clicked paragraph when that is the chosen action", async () => {
+    await using mounted = await mount({ tripleClickAction: "cite" });
     const { onCite } = mounted;
 
     await userEvent.tripleClick(document.getElementById("second")!);
@@ -122,6 +128,16 @@ describe("AssistantSelectionToolbar", () => {
     });
     expect(citeButton()).toBeNull();
     expect(window.getSelection()!.isCollapsed).toBe(true);
+  });
+
+  it("shows the Cite button right after a triple-click by default", async () => {
+    await using mounted = await mount();
+    const { onCite } = mounted;
+
+    await userEvent.tripleClick(document.getElementById("second")!);
+
+    await expect.poll(citeButton, { timeout: 250, interval: 10 }).not.toBeNull();
+    expect(onCite).not.toHaveBeenCalled();
   });
 
   it("still shows the Cite button after a double-click", async () => {

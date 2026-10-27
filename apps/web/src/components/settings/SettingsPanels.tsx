@@ -481,6 +481,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
       ? ["Follow-up behavior"]
       : []),
+    ...(settings.tripleClickAction !== DEFAULT_UNIFIED_SETTINGS.tripleClickAction
+      ? ["Triple-click in responses"]
+      : []),
     ...(settings.contextWindowMeterEnabled !== DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled
       ? ["Context window indicator"]
       : []),
@@ -595,6 +598,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
+      tripleClickAction: DEFAULT_UNIFIED_SETTINGS.tripleClickAction,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
@@ -1045,6 +1049,10 @@ export function ChatSettingsPanel() {
     { value: "mod-enter-multiline", label: `${modifierLabel} + Enter for multiline prompts` },
     { value: "mod-enter", label: `${modifierLabel} + Enter always` },
   ] as const;
+  const tripleClickOptions = [
+    { value: "select", label: "Select paragraph" },
+    { value: "cite", label: "Cite paragraph" },
+  ] as const;
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
 
@@ -1116,6 +1124,54 @@ export function ChatSettingsPanel() {
                     <span className="flex items-center justify-between gap-4">
                       {option.label}
                       {settings.sendShortcut === option.value && <CheckIcon aria-hidden="true" />}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("triple-click-action")}
+          description="Choose what triple-clicking a paragraph in an assistant response does"
+          resetAction={
+            settings.tripleClickAction !== DEFAULT_UNIFIED_SETTINGS.tripleClickAction ? (
+              <SettingResetButton
+                label="triple-click action"
+                onClick={() =>
+                  updateSettings({ tripleClickAction: DEFAULT_UNIFIED_SETTINGS.tripleClickAction })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.tripleClickAction}
+              onValueChange={(value) => {
+                const option = tripleClickOptions.find((option) => option.value === value);
+                if (option) updateSettings({ tripleClickAction: option.value });
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-auto min-w-0 max-w-full"
+                aria-label="Triple-click in responses"
+              >
+                <SelectValue>
+                  {
+                    tripleClickOptions.find((option) => option.value === settings.tripleClickAction)
+                      ?.label
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {tripleClickOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    <span className="flex items-center justify-between gap-4">
+                      {option.label}
+                      {settings.tripleClickAction === option.value && (
+                        <CheckIcon aria-hidden="true" />
+                      )}
                     </span>
                   </SelectItem>
                 ))}

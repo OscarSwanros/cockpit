@@ -531,6 +531,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["enter return command ctrl multiline prompt new line composer"],
   },
   {
+    id: "triple-click-action",
+    title: "Triple-click in responses",
+    to: "/settings/chat",
+    searchTerms: ["triple click paragraph cite quote select assistant response selection"],
+  },
+  {
     id: "follow-up-behavior",
     title: "Follow-up behavior",
     to: "/settings/chat",

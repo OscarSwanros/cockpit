@@ -7,6 +7,7 @@ import {
 import { QuoteIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useClientSettings } from "~/hooks/useSettings";
 import { readLocalApi } from "~/localApi";
 import {
   captureAssistantTextSelection,
@@ -36,6 +37,8 @@ export function AssistantSelectionToolbar({
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
 }) {
   const [selection, setSelection] = useState<CitableSelection | null>(null);
+  const tripleClickAction = useClientSettings((settings) => settings.tripleClickAction);
+  const citesOnTripleClick = useEffectEvent(() => tripleClickAction === "cite");
   const citeSelection = useEffectEvent(({ citation, sourceAnchor }: CitableSelection) => {
     if (citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH) return false;
     if (!onCite(citation, sourceAnchor)) return false;
@@ -135,8 +138,7 @@ export function AssistantSelectionToolbar({
     };
     const update = (pointer: SelectionActionPoint | null, clicks: number) => {
       const target = resolve(pointer);
-      // A triple-click selects a whole paragraph, so it cites without the extra button step.
-      if (target && clicks >= 3 && citeSelection(target)) {
+      if (target && clicks >= 3 && citesOnTripleClick() && citeSelection(target)) {
         actionsRef.current?.cancel();
         setSelection(null);
         return;

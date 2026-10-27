@@ -287,6 +287,9 @@ export const LoadBalancingWeights = Schema.Record(
 export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
 
 export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
+
+export const TripleClickAction = Schema.Literals(["select", "cite"]);
+export type TripleClickAction = typeof TripleClickAction.Type;
 export type ChatWidth = typeof ChatWidth.Type;
 
 export const ModelFavorite = Schema.Struct({
@@ -432,6 +435,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   followUpBehavior: Schema.Literals(["queue", "steer"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("steer")),
+  ),
+  tripleClickAction: TripleClickAction.pipe(
+    Schema.withDecodingDefault(Effect.succeed("select" as const)),
   ),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
@@ -1657,6 +1663,7 @@ export const ClientSettingsPatch = Schema.Struct({
   composerRichTextEnabled: Schema.optionalKey(Schema.Boolean),
   sendShortcut: Schema.optionalKey(Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"])),
   followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
+  tripleClickAction: Schema.optionalKey(TripleClickAction),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
