@@ -9090,8 +9090,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           }
           if (isClaudeGoalAcknowledgement(message)) {
             // The CLI repeats a local command's output as the turn's result text.
-            if (assistantText !== null) {
-              context.assistant.noticeTexts.add(normalizeClaudeResultText(assistantText.text));
+            if (message.type === "assistant") {
+              context.assistant.noticeTexts.add(
+                normalizeClaudeResultText(textFromClaudeContent(message.message.content)),
+              );
             }
             return;
           }
